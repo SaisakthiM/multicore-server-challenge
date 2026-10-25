@@ -63,24 +63,10 @@ def('followDel', `DELETE FROM follows WHERE follower_id = $1::bigint
 // $1 viewer, $2 limit, $3 offset, ($4 filter). The page of ids is picked first (index walk), then only
 // those rows are expanded. articlesCount is the reference's capped count (LIMIT 1000).
 function listStatement(ids, count) {
-  return `WITH p AS MATERIALIZED (${ids}),
-  tg AS (SELECT atg.article_id, array_agg(t.name ORDER BY t.name) AS names
-         FROM p JOIN article_tags atg ON atg.article_id = p.id JOIN tags t ON t.id = atg.tag_id
-         GROUP BY atg.article_id),
-  fv AS (SELECT f.article_id, count(*) AS n, bool_or(f.user_id = $1::bigint) AS me
-         FROM p JOIN favorites f ON f.article_id = p.id GROUP BY f.article_id)
-  SELECT json_build_object(
-    'articles', COALESCE(json_agg(json_build_object(
-      'slug', a.slug, 'title', a.title, 'description', a.description,
-      'tagList', COALESCE(tg.names, '{}'::text[]),
-      'createdAt', ${ts('a.created_at')}, 'updatedAt', ${ts('a.updated_at')},
-      'favorited', COALESCE(fv.me, false),
-      'favoritesCount', COALESCE(fv.n, 0),
-      'author', ${profileObj('u', followsExists('$1::bigint', 'a.author_id'))}) ORDER BY a.id DESC), '[]'::json),
+  return `SELECT json_build_object(
+    'articles', COALESCE(json_agg(${articleObj(false)} ORDER BY a.id DESC), '[]'::json),
     'articlesCount', (${count}))
-  FROM p JOIN articles a ON a.id = p.id JOIN users u ON u.id = a.author_id
-  LEFT JOIN tg ON tg.article_id = a.id
-  LEFT JOIN fv ON fv.article_id = a.id`;
+  FROM (${ids}) p JOIN articles a ON a.id = p.id JOIN users u ON u.id = a.author_id`;
 }
 const PAGE = 'LIMIT $2::bigint OFFSET $3::bigint';
 
