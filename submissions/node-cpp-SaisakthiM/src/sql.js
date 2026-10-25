@@ -64,12 +64,11 @@ def('followDel', `DELETE FROM follows WHERE follower_id = $1::bigint
 // those rows are expanded. articlesCount is the reference's capped count (LIMIT 1000).
 function listStatement(ids, count) {
   return `WITH p AS MATERIALIZED (${ids}),
-  pa AS (SELECT COALESCE(array_agg(id), '{}'::bigint[]) AS ids FROM p),
   tg AS (SELECT atg.article_id, array_agg(t.name ORDER BY t.name) AS names
-         FROM article_tags atg JOIN tags t ON t.id = atg.tag_id
-         WHERE atg.article_id = ANY((SELECT ids FROM pa)) GROUP BY atg.article_id),
+         FROM p JOIN article_tags atg ON atg.article_id = p.id JOIN tags t ON t.id = atg.tag_id
+         GROUP BY atg.article_id),
   fv AS (SELECT f.article_id, count(*) AS n, bool_or(f.user_id = $1::bigint) AS me
-         FROM favorites f WHERE f.article_id = ANY((SELECT ids FROM pa)) GROUP BY f.article_id)
+         FROM p JOIN favorites f ON f.article_id = p.id GROUP BY f.article_id)
   SELECT json_build_object(
     'articles', COALESCE(json_agg(json_build_object(
       'slug', a.slug, 'title', a.title, 'description', a.description,
