@@ -105,7 +105,7 @@ const articleFull = (where) => `SELECT json_build_object('article', ${articleObj
   FROM articles a JOIN users u ON u.id = a.author_id WHERE ${where}`;
 def('articleBySlug', articleFull('a.slug = $2::text'));            // $1 viewer, $2 slug
 def('articleById', articleFull('a.id = $2::bigint'));              // $1 viewer, $2 id
-def('articleByCurrId', articleFull(`a.id = currval(pg_get_serial_sequence('articles', 'id'))`)); // $1 viewer
+def('articleByCurrId', articleFull(`a.id = (SELECT currval(pg_get_serial_sequence('articles', 'id')))`)); // $1 viewer
 
 // POST /api/articles is three statements in ONE request (one implicit transaction, committed at the Sync):
 // tagsIns (only with tags), articleIns, articleByCurrId. Requests never interleave on a connection, so the
