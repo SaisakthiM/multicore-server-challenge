@@ -1,5 +1,8 @@
 'use strict';
-// Primary process: pre-forks N workers and keeps them alive. It never touches a request.
+// Primary process: pre-forks N workers. It never touches a request.
+// Rule 9: a crashed server is not restarted, so a worker that dies stays dead (no respawn). The remaining workers
+// keep serving (SO_REUSEPORT only routes new connections to live listening sockets); once every worker is gone
+// the primary exits too.
 // The Postgres connection budget (max_connections = 100, rule: <= 95 in total) is split across the workers.
 
 const { fork } = require('node:child_process');
@@ -53,8 +56,11 @@ function spawn(i) {
   child.on('exit', (code, signal) => {
     children.delete(i);
     if (stopping) return;
-    console.error(`[main] worker ${i} exited (${signal || code}); restarting`);
-    setTimeout(() => spawn(i), 250);
+    console.error(`[main] worker ${i} exited (${signal || code}); NOT restarting (a crashed server stays down)`);
+    if (children.size === 0) {
+      console.error('[main] all workers are gone; exiting');
+      process.exit(1);
+    }
   });
 }
 
